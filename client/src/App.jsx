@@ -2,16 +2,15 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import LoginPage from './pages/loginPage';
 import HomePage from './pages/homePage';
 import { AuthProvider } from './contexts/authContext';
-import Navbar from './components/Navbar';
 import PrivateRoute from './components/PrivateRoute';
 import DocentePage from './pages/Docente';
 import StudentePage from './pages/Studente';
+import StatoClassePage from './pages/StatoClassePage';
 
 function App() {
   return (
     <AuthProvider>
       <Router>
-        <Navbar />
         <Routes>
           <Route path="/" element={<LoginPage />} />
           <Route
@@ -38,6 +37,8 @@ function App() {
               </PrivateRoute>
             }
           />
+          <Route path="/stato-classe/:idDocente" element={<StatoClassePage />} />
+
         </Routes>
       </Router>
     </AuthProvider>

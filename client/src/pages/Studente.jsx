@@ -1,49 +1,80 @@
+import {
+  Container, Card, Button, Form, Row, Col, Spinner, Modal, Toast
+} from 'react-bootstrap';
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/authContext';
+import Navbar from '../components/Navbar';
 
 function StudentePage() {
-  const { user } = useAuth();
+  const { user, setUser } = useAuth();
   const [aperti, setAperti] = useState([]);
   const [chiusi, setChiusi] = useState([]);
   const [media, setMedia] = useState(null);
-  const [risposte, setRisposte] = useState({}); // testo risposta per ogni compito
   const [loading, setLoading] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [currentCompito, setCurrentCompito] = useState(null);
+  const [currentRisposta, setCurrentRisposta] = useState('');
+  const [risposte, setRisposte] = useState({});
+  const [showToast, setShowToast] = useState(false);
 
-  // Carica compiti all'avvio
   useEffect(() => {
-    const fetchCompiti = async () => {
+    const fetchDati = async () => {
       try {
-        const resAperti = await fetch('http://localhost:3001/api/miei-compiti-aperti', {
-          credentials: 'include',
+        const resUser = await fetch('http://localhost:3001/api/mio-nome', {
+          credentials: 'include'
         });
-        const datiAperti = await resAperti.json();
-        setAperti(datiAperti);
+        if (!resUser.ok) throw new Error('Errore utente');
+        const datiUtente = await resUser.json();
+        setUser(datiUtente);
 
-        const resChiusi = await fetch('http://localhost:3001/api/miei-compiti-chiusi', {
-          credentials: 'include',
-        });
+        const [resAperti, resChiusi] = await Promise.all([
+          fetch('http://localhost:3001/api/miei-compiti-aperti', { credentials: 'include' }),
+          fetch('http://localhost:3001/api/miei-compiti-chiusi', { credentials: 'include' })
+        ]);
+
+        const datiAperti = await resAperti.json();
         const datiChiusi = await resChiusi.json();
+
+        setAperti(datiAperti);
         setChiusi(datiChiusi.compiti);
         setMedia(datiChiusi.media);
+
+        const nuoveRisposte = {};
+        for (const compito of datiAperti) {
+          const res = await fetch(`http://localhost:3001/api/mia-risposta/${compito.compitoId}`, {
+            credentials: 'include'
+          });
+          if (res.ok) {
+            const dati = await res.json();
+            if (!dati.empty) {
+              nuoveRisposte[compito.compitoId] = dati.testo;
+            }
+          }
+        }
+        setRisposte(nuoveRisposte);
+
       } catch (err) {
-        console.error('Errore nel caricamento compiti:', err);
+        console.error('Errore caricamento dati:', err);
       }
     };
 
-    if (user?.ruolo === 'studente') fetchCompiti();
-  }, [user]);
+    fetchDati();
+  }, [setUser]);
 
-  const handleSubmit = async (e, compitoId) => {
+  const apriModaleRisposta = (compito) => {
+    setCurrentCompito(compito);
+    setCurrentRisposta(risposte[compito.compitoId] || '');
+    setShowModal(true);
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    const testo = risposte[compitoId];
-    if (!testo || testo.trim() === '') {
-      alert('Inserisci un testo valido.');
-      return;
-    }
+    const testo = currentRisposta.trim();
+    if (!testo) return alert('Inserisci un testo valido.');
 
     setLoading(true);
     try {
-      const res = await fetch(`http://localhost:3001/api/compiti/${compitoId}/risposta`, {
+      const res = await fetch(`http://localhost:3001/api/compiti/${currentCompito.compitoId}/risposta`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -56,67 +87,133 @@ function StudentePage() {
         return;
       }
 
-      alert('Risposta salvata!');
+      setRisposte(prev => ({ ...prev, [currentCompito.compitoId]: testo }));
+      setShowModal(false);
+      setShowToast(true);
+
     } catch (err) {
-      console.error('Errore invio risposta:', err);
+      console.error('Errore invio:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  return (
-    <div>
-      <h2>Benvenuto, {user?.nome || user?.email}</h2>
+  const fullName = [user?.nome, user?.cognome].filter(Boolean).join(' ') || user?.email;
 
-      <h3>Compiti Aperti</h3>
-      {aperti.length === 0 ? (
-        <p>Nessun compito aperto disponibile.</p>
-      ) : (
-        <ul>
-          {aperti.map((c) => (
-            <li key={c.compitoId}>
-              <strong>Domanda:</strong> {c.domanda} <br />
-              <strong>Docente:</strong> {c.nomeDocente} {c.cognomeDocente} <br />
-              <form onSubmit={(e) => handleSubmit(e, c.compitoId)}>
-                <textarea
-                  rows={3}
-                  value={risposte[c.compitoId] || ''}
-                  onChange={(e) =>
-                    setRisposte((prev) => ({ ...prev, [c.compitoId]: e.target.value }))
-                  }
-                  placeholder="Scrivi la risposta del gruppo..."
+  const filtraCompagni = (lista) => {
+    const me = fullName.trim();
+    return lista
+      .split(',')
+      .map(s => s.trim())
+      .filter(n => n !== me)
+      .join(', ');
+  };
+
+  return (
+    <>
+      <Navbar />
+      <Container
+        fluid
+        className="px-4 py-4"
+        style={{ minHeight: '100vh', backgroundColor: '#f9f9f9' }}
+      >
+        <h2 className="mb-4">Benvenuto, {fullName}</h2>
+
+        <Toast
+          onClose={() => setShowToast(false)}
+          show={showToast}
+          delay={3000}
+          autohide
+          bg="success"
+          className="position-fixed bottom-0 end-0 m-3"
+        >
+          <Toast.Header>
+            <strong className="me-auto">Conferma</strong>
+          </Toast.Header>
+          <Toast.Body className="text-white">Risposta salvata con successo!</Toast.Body>
+        </Toast>
+
+        <h4 className="mt-4">📘 Compiti Aperti</h4>
+        {aperti.length === 0 ? (
+          <p>Nessun compito aperto disponibile.</p>
+        ) : (
+          <Row>
+            {aperti.map((c) => (
+              <Col md={6} lg={4} key={c.compitoId} className="mb-4">
+                <Card>
+                  <Card.Body>
+                    <Card.Title>{c.domanda}</Card.Title>
+                    <Card.Text>
+                      <strong>Docente:</strong> {c.nomeDocente} {c.cognomeDocente}<br />
+                      <strong>Compagni di gruppo:</strong><br />
+                      {filtraCompagni(c.studentiNelGruppo) || 'Nessun altro studente'}
+                    </Card.Text>
+                    <Button onClick={() => apriModaleRisposta(c)} variant="primary">
+                      {risposte[c.compitoId] ? 'Aggiorna risposta' : 'Invia risposta'}
+                    </Button>
+                  </Card.Body>
+                </Card>
+              </Col>
+            ))}
+          </Row>
+        )}
+
+        <h4 className="mt-5">📗 Compiti Valutati</h4>
+        {chiusi.length === 0 ? (
+          <p>Nessun compito valutato ancora.</p>
+        ) : (
+          <Row>
+            {chiusi.map((c) => (
+              <Col md={6} lg={4} key={c.id} className="mb-4">
+                <Card border="success">
+                  <Card.Body>
+                    <Card.Title>{c.domanda}</Card.Title>
+                    <Card.Text>
+                      <strong>Voto:</strong> {c.voto}/30<br />
+                      <strong>Compagni di gruppo:</strong><br />
+                      {filtraCompagni(c.studentiNelGruppo) || 'Nessun altro studente'}
+                    </Card.Text>
+                  </Card.Body>
+                </Card>
+              </Col>
+            ))}
+          </Row>
+        )}
+
+        <h4 className="mt-4">📊 Media Ponderata</h4>
+        <p className="fs-5">{media !== null ? `${media}/30` : 'Non disponibile'}</p>
+
+        <Modal show={showModal} onHide={() => setShowModal(false)}>
+          <Modal.Header closeButton>
+            <Modal.Title>{risposte[currentCompito?.compitoId] ? 'Aggiorna Risposta' : 'Invia Risposta'}</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            <Form onSubmit={handleSubmit}>
+              <Form.Group>
+                <Form.Label>Risposta</Form.Label>
+                <Form.Control
+                  as="textarea"
+                  rows={4}
+                  value={currentRisposta}
+                  onChange={(e) => setCurrentRisposta(e.target.value)}
                   required
                 />
-                <br />
-                <button type="submit" disabled={loading}>
-                  {loading ? 'Salvataggio...' : 'Invia / Aggiorna risposta'}
-                </button>
-              </form>
-              <hr />
-            </li>
-          ))}
-        </ul>
-      )}
-
-      <h3>Compiti Valutati</h3>
-      {chiusi.length === 0 ? (
-        <p>Nessun compito valutato ancora.</p>
-      ) : (
-        <ul>
-          {chiusi.map((c) => (
-            <li key={c.id}>
-              <strong>Domanda:</strong> {c.domanda} <br />
-              <strong>Voto:</strong> {c.voto}/30 <br />
-              <strong>Studenti nel gruppo:</strong> {c.studentiNelGruppo}
-              <hr />
-            </li>
-          ))}
-        </ul>
-      )}
-
-      <h3>Media Ponderata:</h3>
-      <p>{media !== null ? `${media}/30` : 'Non disponibile'}</p>
-    </div>
+              </Form.Group>
+              <Button className="mt-3" type="submit" disabled={loading}>
+                {loading ? (
+                  <>
+                    <Spinner animation="border" size="sm" className="me-2" />
+                    Salvataggio...
+                  </>
+                ) : (
+                  risposte[currentCompito?.compitoId] ? 'Aggiorna' : 'Invia'
+                )}
+              </Button>
+            </Form>
+          </Modal.Body>
+        </Modal>
+      </Container>
+    </>
   );
 }
 

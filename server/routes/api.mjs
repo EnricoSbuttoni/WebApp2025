@@ -309,12 +309,14 @@ router.get('/miei-compiti-aperti', isLoggedIn, isStudente, async (req, res) => {
     const db = await dbPromise;
     const studente = await db.get('SELECT id FROM Studente WHERE userId = ?', req.user.id);
     if (!studente) return res.status(403).json({ error: 'Utente non studente.' });
+
     const compiti = await db.all(`
       SELECT 
         c.id as compitoId,
         c.domanda,
         d.nome as nomeDocente,
-        d.cognome as cognomeDocente
+        d.cognome as cognomeDocente,
+        g.id as gruppoId
       FROM Compito c
       JOIN Docente d ON d.id = c.docenteId
       JOIN Gruppo g ON g.compitoId = c.id
@@ -323,55 +325,80 @@ router.get('/miei-compiti-aperti', isLoggedIn, isStudente, async (req, res) => {
         AND c.stato = 'aperto'
     `, [studente.id]);
 
-    res.json(compiti);
+    // Per ogni compito, prendi i compagni
+    const risultati = [];
+    for (const c of compiti) {
+      const studenti = await db.all(`
+        SELECT nome, cognome FROM Studente s
+        JOIN StudenteGruppo sg ON sg.studenteId = s.id
+        WHERE sg.gruppoId = ?
+      `, [c.gruppoId]);
 
+      risultati.push({
+        compitoId: c.compitoId,
+        domanda: c.domanda,
+        nomeDocente: c.nomeDocente,
+        cognomeDocente: c.cognomeDocente,
+        studentiNelGruppo: studenti.map(s => `${s.nome} ${s.cognome}`).join(', ')
+      });
+    }
+
+    res.json(risultati);
   } catch (err) {
     console.error('Errore in GET /miei-compiti-aperti:', err);
     res.status(500).json({ error: 'Errore del server.' });
   }
 });
+
 router.get('/miei-compiti-chiusi', isLoggedIn, isStudente, async (req, res) => {
   try {
     const db = await dbPromise;
     const studente = await db.get('SELECT id FROM Studente WHERE userId = ?', req.user.id);
     if (!studente) return res.status(403).json({ error: 'Utente non studente.' });
-    // Recupera i compiti chiusi con voto
+
     const compiti = await db.all(`
       SELECT 
         c.id as compitoId,
         c.domanda,
         v.voto,
-        COUNT(sg2.studenteId) as numStudenti
+        g.id as gruppoId
       FROM Compito c
       JOIN Gruppo g ON g.compitoId = c.id
       JOIN StudenteGruppo sg ON sg.gruppoId = g.id
-      JOIN StudenteGruppo sg2 ON sg2.gruppoId = g.id
       JOIN Valutazione v ON v.compitoId = c.id
       WHERE sg.studenteId = ?
         AND c.stato = 'chiuso'
       GROUP BY c.id
     `, [studente.id]);
 
-    // Calcola media pesata
     let sommaPesata = 0;
     let sommaPesi = 0;
+    const risultati = [];
 
-    for (const compito of compiti) {
-      const peso = 1 / compito.numStudenti;
-      sommaPesata += compito.voto * peso;
+    for (const c of compiti) {
+      const studenti = await db.all(`
+        SELECT nome, cognome FROM Studente s
+        JOIN StudenteGruppo sg ON sg.studenteId = s.id
+        WHERE sg.gruppoId = ?
+      `, [c.gruppoId]);
+
+      const peso = 1 / studenti.length;
+      sommaPesata += c.voto * peso;
       sommaPesi += peso;
+
+      risultati.push({
+        id: c.compitoId,
+        domanda: c.domanda,
+        voto: c.voto,
+        studentiNelGruppo: studenti.map(s => `${s.nome} ${s.cognome}`).join(', ')
+      });
     }
 
     const mediaPesata = sommaPesi > 0 ? (sommaPesata / sommaPesi).toFixed(2) : null;
 
     res.json({
       media: mediaPesata,
-      compiti: compiti.map(c => ({
-        id: c.compitoId,
-        domanda: c.domanda,
-        voto: c.voto,
-        studentiNelGruppo: c.numStudenti
-      }))
+      compiti: risultati
     });
 
   } catch (err) {
@@ -379,6 +406,7 @@ router.get('/miei-compiti-chiusi', isLoggedIn, isStudente, async (req, res) => {
     res.status(500).json({ error: 'Errore interno del server.' });
   }
 });
+
 router.get('/stato-classe', isLoggedIn, isDocente, async (req, res) => {
   const sort = req.query.sort || 'nome'; // nome | compiti | media
 
@@ -450,5 +478,81 @@ router.get('/stato-classe', isLoggedIn, isDocente, async (req, res) => {
     res.status(500).json({ error: 'Errore interno del server' });
   }
 });
+router.get('/mio-nome', isLoggedIn, async (req, res) => {
+  try {
+    const db = await dbPromise;
+
+    // Recupera info base utente
+    const utente = await db.get('SELECT id, email FROM Utente WHERE id = ?', req.user.id);
+    if (!utente) return res.status(404).json({ error: 'Utente non trovato.' });
+
+    // Prova come studente
+    const studente = await db.get('SELECT nome, cognome FROM Studente WHERE userId = ?', req.user.id);
+    if (studente) {
+      return res.json({
+        nome: studente.nome,
+        cognome: studente.cognome,
+        email: utente.email,
+        ruolo: 'studente'
+      });
+    }
+
+    // Prova come docente
+    const docente = await db.get('SELECT nome, cognome FROM Docente WHERE userId = ?', req.user.id);
+    if (docente) {
+      return res.json({
+        nome: docente.nome,
+        cognome: docente.cognome,
+        email: utente.email,
+        ruolo: 'docente'
+      });
+    }
+
+    // Se non è né studente né docente
+    res.status(403).json({ error: 'Ruolo utente non riconosciuto.' });
+  } catch (err) {
+    console.error('Errore in GET /mio-nome:', err);
+    res.status(500).json({ error: 'Errore interno del server.' });
+  }
+});
+router.get('/mia-risposta/:id', isLoggedIn, isStudente, async (req, res) => {
+  const compitoId = req.params.id;
+
+  try {
+    const db = await dbPromise;
+
+    // Verifica che lo studente sia valido
+    const studente = await db.get('SELECT id FROM Studente WHERE userId = ?', req.user.id);
+    if (!studente) return res.status(403).json({ error: 'Utente non studente.' });
+
+    // Trova il gruppo dello studente per il compito specificato
+    const gruppo = await db.get(`
+      SELECT g.id as gruppoId
+      FROM Gruppo g
+      JOIN StudenteGruppo sg ON sg.gruppoId = g.id
+      WHERE g.compitoId = ? AND sg.studenteId = ?
+    `, [compitoId, studente.id]);
+
+    if (!gruppo) {
+      return res.status(403).json({ error: 'Non fai parte del gruppo per questo compito.' });
+    }
+
+    // Recupera la risposta (se esiste)
+    const risposta = await db.get(`
+      SELECT testo FROM Risposta WHERE gruppoId = ?
+    `, [gruppo.gruppoId]);
+
+    if (!risposta) {
+      return res.status(200).json({ empty: true, testo: '' });
+    }
+
+    res.status(200).json({ empty: false, testo: risposta.testo });
+
+  } catch (err) {
+    console.error('Errore in GET /mia-risposta/:id:', err);
+    res.status(500).json({ error: 'Errore del server.' });
+  }
+});
+
 
 export default router;

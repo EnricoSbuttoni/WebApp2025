@@ -1,7 +1,8 @@
-import { Link, useNavigate } from 'react-router-dom';
+import { Navbar, Container, Nav, Button } from 'react-bootstrap';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/authContext';
 
-function Navbar() {
+function AppNavbar() {
   const { user, setUser } = useAuth();
   const navigate = useNavigate();
 
@@ -14,14 +15,29 @@ function Navbar() {
     navigate('/');
   };
 
-  if (!user) return null; // non mostrare la navbar se non loggato
+  if (!user) return null;
 
   return (
-    <nav>
-      <span>Benvenuto, {user.nome || user.email} ({user.ruolo})</span>
-      <button onClick={handleLogout}>Logout</button>
-    </nav>
+    <Navbar bg="dark" variant="dark" expand="lg">
+      <Container>
+        <Navbar.Brand>
+          Compiti WebApp
+        </Navbar.Brand>
+        <Navbar.Toggle aria-controls="basic-navbar-nav" />
+
+        <Navbar.Collapse id="basic-navbar-nav" className="justify-content-end">
+          <Nav>
+            <Nav.Item className="me-3 text-light">
+              {user.nome} ({user.ruolo})
+            </Nav.Item>
+            <Button variant="outline-light" onClick={handleLogout}>
+              Logout
+            </Button>
+          </Nav>
+        </Navbar.Collapse>
+      </Container>
+    </Navbar>
   );
 }
 
-export default Navbar;
+export default AppNavbar;
