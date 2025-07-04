@@ -117,7 +117,7 @@ function StudentePage() {
         className="px-4 py-4"
         style={{ minHeight: '100vh', backgroundColor: '#f9f9f9' }}
       >
-        <h2 className="mb-4">Benvenuto, {fullName}</h2>
+        
 
         <Toast
           onClose={() => setShowToast(false)}
@@ -148,7 +148,7 @@ function StudentePage() {
                       <strong>Compagni di gruppo:</strong><br />
                       {filtraCompagni(c.studentiNelGruppo) || 'Nessun altro studente'}
                     </Card.Text>
-                    <Button onClick={() => apriModaleRisposta(c)} variant="primary">
+                    <Button variant="success" onClick={() => apriModaleRisposta(c)}>
                       {risposte[c.compitoId] ? 'Aggiorna risposta' : 'Invia risposta'}
                     </Button>
                   </Card.Body>
@@ -199,7 +199,7 @@ function StudentePage() {
                   required
                 />
               </Form.Group>
-              <Button className="mt-3" type="submit" disabled={loading}>
+              <Button variant="success"className="mt-3" type="submit" disabled={loading}>
                 {loading ? (
                   <>
                     <Spinner animation="border" size="sm" className="me-2" />

@@ -1,5 +1,5 @@
 import {
-  Container, Button, Card, Modal, Form, Row, Col
+  Container, Button, Card, Modal, Form, Row, Col, Alert
 } from 'react-bootstrap';
 import Navbar from '../components/Navbar';
 import { useEffect, useState } from 'react';
@@ -20,6 +20,7 @@ function DocentePage() {
   const [studentiDisponibili, setStudentiDisponibili] = useState([]);
   const [domanda, setDomanda] = useState('');
   const [studentiSelezionati, setStudentiSelezionati] = useState([]);
+  const [erroreCreazione, setErroreCreazione] = useState('');
 
   useEffect(() => {
     const fetchData = async () => {
@@ -128,7 +129,7 @@ function DocentePage() {
   const creaNuovoCompito = async (e) => {
     e.preventDefault();
     if (studentiSelezionati.length < 2 || studentiSelezionati.length > 6) {
-      alert('Seleziona tra 2 e 6 studenti.');
+      setErroreCreazione('Seleziona tra 2 e 6 studenti.');
       return;
     }
 
@@ -142,7 +143,7 @@ function DocentePage() {
 
       if (!res.ok) {
         const err = await res.json();
-        alert(err.error);
+        setErroreCreazione(err.error);
         return;
       }
 
@@ -154,6 +155,7 @@ function DocentePage() {
       setDomanda('');
       setStudentiSelezionati([]);
       setShowCreateModal(false);
+      setErroreCreazione('');
     } catch (err) {
       console.error('Errore creazione compito:', err);
     }
@@ -209,7 +211,7 @@ function DocentePage() {
                 )}
 
                 {c.stato !== 'chiuso' && c.haRisposta && (
-                  <Button variant="primary" size="sm" onClick={() => handleValutazione(c.compitoId)}>
+                  <Button variant="danger" size="sm" onClick={() => handleValutazione(c.compitoId)}>
                     Valuta
                   </Button>
                 )}
@@ -234,19 +236,13 @@ function DocentePage() {
         <div className="d-flex justify-content-between align-items-center mb-4">
           <h2>Compiti creati da {nomeCompleto}</h2>
           <div className="d-flex gap-2">
-            <Button
-              variant="outline-secondary"
-              onClick={() => navigate(`/stato-classe/${user?.id || user?.userId}`)}
-            >
-              Stato Classe
-            </Button>
-            <Button onClick={apriModaleCreazione}>Crea nuovo compito</Button>
+            <Button variant="danger" onClick={apriModaleCreazione}>Crea nuovo compito</Button>
           </div>
         </div>
 
-        {renderCompiti(daValutare, '📝 Compiti da valutare')}
+        {renderCompiti(daValutare, '📝 Da valutare')}
         {renderCompiti(inAttesa, '⏳ In attesa di risposta')}
-        {renderCompiti(valutati, '✅ Compiti valutati')}
+        {renderCompiti(valutati, '✅ Valutati')}
 
         {/* Modale Valutazione */}
         <Modal show={modalMode === 'valuta'} onHide={() => {
@@ -270,13 +266,16 @@ function DocentePage() {
                   required
                 />
               </Form.Group>
-              <Button className="mt-3" type="submit">Conferma</Button>
+              <Button variant="danger" className="mt-3" type="submit">Conferma</Button>
             </Form>
           </Modal.Body>
         </Modal>
 
         {/* Modale Creazione Compito */}
-        <Modal show={showCreateModal} onHide={() => setShowCreateModal(false)}>
+        <Modal show={showCreateModal} onHide={() => {
+          setShowCreateModal(false);
+          setErroreCreazione('');
+        }}>
           <Modal.Header closeButton>
             <Modal.Title>Crea Nuovo Compito</Modal.Title>
           </Modal.Header>
@@ -311,7 +310,12 @@ function DocentePage() {
                   />
                 ))}
               </Form.Group>
-              <Button className="mt-3" type="submit">Crea</Button>
+              {erroreCreazione && (
+                <Alert variant="danger" dismissible onClose={() => setErroreCreazione('')} className="mt-3">
+                  {erroreCreazione}
+                </Alert>
+              )}
+              <Button variant="danger" className="mt-3" type="submit">Crea</Button>
             </Form>
           </Modal.Body>
         </Modal>

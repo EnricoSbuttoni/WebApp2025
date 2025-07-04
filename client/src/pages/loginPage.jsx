@@ -37,7 +37,7 @@ function LoginPage() {
         setErrorMsg(err.error || 'Errore di login');
       }
     } catch {
-      setErrorMsg('Errore di rete');
+      setErrorMsg('Username o password errati');
     }
   };
 

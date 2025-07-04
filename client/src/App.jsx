@@ -37,7 +37,7 @@ function App() {
               </PrivateRoute>
             }
           />
-          <Route path="/stato-classe/:idDocente" element={<StatoClassePage />} />
+          <Route path="/stato-classe" element={<StatoClassePage />} />
 
         </Routes>
       </Router>

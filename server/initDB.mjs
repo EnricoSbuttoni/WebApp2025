@@ -20,11 +20,11 @@ async function initDatabase() {
 
   const password = 'password';
   const saltRounds = 10;
-  const hash = await bcrypt.hash(password, saltRounds);
 
   // Inserisci 2 docenti
   for (let i = 1; i <= 2; i++) {
     const email = `d${i}@webapp.it`;
+    const hash = await bcrypt.hash(password, saltRounds);
     await db.run('INSERT INTO Utente (email, passwordHash, ruolo) VALUES (?, ?, ?)', [email, hash, 'docente']);
     await db.run(`
       INSERT INTO Docente (nome, cognome, userId)
@@ -35,6 +35,7 @@ async function initDatabase() {
   // Inserisci 20 studenti
   for (let i = 1; i <= 20; i++) {
     const email = `s${i}@webapp.it`;
+    const hash = await bcrypt.hash(password, saltRounds);
     await db.run('INSERT INTO Utente (email, passwordHash, ruolo) VALUES (?, ?, ?)', [email, hash, 'studente']);
     await db.run(`
       INSERT INTO Studente (nome, cognome, userId)
