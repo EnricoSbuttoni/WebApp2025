@@ -209,7 +209,7 @@ export async function getCompitiChiusiPerStudente(userId) {
   return { media, compiti: risultati };
 }
 
-export async function getStatoClasse(userId, sort = 'nome') {
+export async function getStatoClasse(userId, sort = 'nome', direction = 'asc') {
   const db = await dbPromise;
   const docente = await db.get('SELECT id FROM Docente WHERE userId = ?', userId);
   const studenti = await db.all('SELECT s.id, s.nome, s.cognome FROM Studente s');
@@ -250,9 +250,23 @@ export async function getStatoClasse(userId, sort = 'nome') {
     });
   }
 
-  if (sort === 'media') report.sort((a, b) => (b.media || 0) - (a.media || 0));
-  else if (sort === 'compiti') report.sort((a, b) => (b.compitiAperti + b.compitiChiusi) - (a.compitiAperti + a.compitiChiusi));
-  else report.sort((a, b) => a.cognome.localeCompare(b.cognome) || a.nome.localeCompare(b.nome));
+  const compare = (a, b) => {
+    const dir = direction === 'desc' ? -1 : 1;
 
+    if (sort === 'media') {
+      return dir * ((a.media || 0) - (b.media || 0));
+    } else if (sort === 'compiti') {
+      const totalA = a.compitiAperti + a.compitiChiusi;
+      const totalB = b.compitiAperti + b.compitiChiusi;
+      return dir * (totalA - totalB);
+    } else {
+      // ordinamento per cognome + nome
+      const cmpCognome = a.cognome.localeCompare(b.cognome);
+      const cmpNome = a.nome.localeCompare(b.nome);
+      return dir * (cmpCognome !== 0 ? cmpCognome : cmpNome);
+    }
+  };
+
+  report.sort(compare);
   return report;
 }

@@ -103,12 +103,14 @@ router.get('/miei-compiti-chiusi', isLoggedIn, isStudente, async (req, res) => {
 
 router.get('/stato-classe', isLoggedIn, isDocente, async (req, res) => {
   try {
-    const result = await getStatoClasse(req.user.id, req.query.sort);
+    const { sort = 'nome', direction = 'asc' } = req.query;
+    const result = await getStatoClasse(req.user.id, sort, direction);
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: 'Errore interno del server' });
   }
 });
+
 
 router.get('/mio-nome', isLoggedIn, async (req, res) => {
   try {

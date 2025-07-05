@@ -4,15 +4,16 @@ import { useParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 
 function StatoClassePage() {
-  const { idDocente } = useParams(); // per compatibilità futura
+  const { idDocente } = useParams();
   const [report, setReport] = useState([]);
-  const [sort, setSort] = useState('nome');
+  const [sortField, setSortField] = useState('nome');
+  const [sortDirection, setSortDirection] = useState('asc');
   const [loading, setLoading] = useState(false);
 
-  const fetchReport = async (criterio = 'nome') => {
+  const fetchReport = async (field = 'nome', direction = 'asc') => {
     setLoading(true);
     try {
-      const res = await fetch(`http://localhost:3001/api/stato-classe?sort=${criterio}`, {
+      const res = await fetch(`http://localhost:3001/api/stato-classe?sort=${field}&direction=${direction}`, {
         credentials: 'include',
       });
       const data = await res.json();
@@ -25,13 +26,27 @@ function StatoClassePage() {
   };
 
   useEffect(() => {
-    fetchReport(sort);
-  }, [sort]);
+    fetchReport(sortField, sortDirection);
+  }, [sortField, sortDirection]);
+
+  const toggleSort = (field) => {
+    if (field === sortField) {
+      setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
 
   const sortLabel = {
     nome: 'Per nome',
     compiti: 'Per numero di compiti',
     media: 'Per media'
+  };
+
+  const sortArrow = (field) => {
+    if (field !== sortField) return '';
+    return sortDirection === 'asc' ? ' ▲' : ' ▼';
   };
 
   return (
@@ -45,15 +60,21 @@ function StatoClassePage() {
         <h2 className="mb-3">📊 Stato della Classe</h2>
 
         <div className="d-flex justify-content-between align-items-center mb-3">
-          <h5>Ordinamento: {sortLabel[sort]}</h5>
-          <Dropdown onSelect={(val) => setSort(val)}>
+          <h5>Ordinamento: {sortLabel[sortField]}</h5>
+          <Dropdown onSelect={toggleSort}>
             <Dropdown.Toggle variant="secondary" size="sm">
               Cambia ordinamento
             </Dropdown.Toggle>
             <Dropdown.Menu>
-              <Dropdown.Item eventKey="nome">Per nome</Dropdown.Item>
-              <Dropdown.Item eventKey="compiti">Per numero di compiti</Dropdown.Item>
-              <Dropdown.Item eventKey="media">Per media</Dropdown.Item>
+              <Dropdown.Item eventKey="nome">
+                Per nome{sortArrow('nome')}
+              </Dropdown.Item>
+              <Dropdown.Item eventKey="compiti">
+                Per numero di compiti{sortArrow('compiti')}
+              </Dropdown.Item>
+              <Dropdown.Item eventKey="media">
+                Per media{sortArrow('media')}
+              </Dropdown.Item>
             </Dropdown.Menu>
           </Dropdown>
         </div>
